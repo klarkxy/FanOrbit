@@ -96,9 +96,30 @@
 
     let fans = Array.from(seen.values()).sort((a, b) => a.index - b.index);
     if (maxCount !== 'all') fans = fans.slice(0, maxCount);
+    const reachedExpected = expectedCount !== null && fans.length >= expectedCount;
+    const followersComplete = reachedExpected && !incomplete && !stopRequested;
+    const coverageNote = followersComplete
+      ? ''
+      : (stopRequested
+        ? '采集被停下，名单不是全量'
+        : (expectedCount == null
+          ? '没有拿到公开粉丝数，不能判断名单是否完整'
+          : '采集停在公开粉丝数之前，名单不是全量'));
 
     await chrome.storage.local.set({
-      fansData: { username: target, fans, total: fans.length, collectedAt: Date.now() },
+      fansData: {
+        username: target,
+        fans,
+        total: fans.length,
+        collectedAt: Date.now(),
+        coverage: {
+          source: 'dom',
+          followersComplete,
+          expected: expectedCount,
+          collected: fans.length,
+          note: coverageNote
+        }
+      },
       progress: {
         current: fans.length,
         max: maxCount === 'all'
@@ -108,7 +129,9 @@
           ? '已停止，粉丝部分可用'
           : incomplete
             ? `粉丝采集未完成：已采集 ${fans.length} / ${expectedCount} 位`
-            : fans.length ? '粉丝采集完成' : '未采集到粉丝'
+            : (followersComplete
+              ? '粉丝采集完成'
+              : (fans.length ? `已采集 ${fans.length} 位。${coverageNote}` : '未采集到粉丝'))
       }
     });
 
@@ -132,6 +155,7 @@
       const avatar = extractAvatar(cell);
       if (!avatar) continue;
       seen.set(username, {
+        id: 'name:' + username.toLowerCase(),
         username,
         avatar,
         index: seen.size + 1,
@@ -181,24 +205,11 @@
     const imgs = cell.querySelectorAll('img');
     for (const img of imgs) {
       const src = img.getAttribute('src') || img.currentSrc || '';
-      if (src && /twimg\.com/.test(src)) return upscaleAvatar(src);
+      if (src && typeof FanOrbitAvatarUrl !== 'undefined' && FanOrbitAvatarUrl.isOfficialAvatarUrl(src)) {
+        return src;
+      }
     }
     return null;
-  }
-
-  function upscaleAvatar(url) {
-    try {
-      const u = new URL(url);
-      u.pathname = u.pathname
-        .replace(/_normal(\.[A-Za-z]+)$/, '_400x400$1')
-        .replace(/_mini(\.[A-Za-z]+)$/, '_400x400$1')
-        .replace(/_bigger(\.[A-Za-z]+)$/, '_400x400$1')
-        .replace(/_200x200(\.[A-Za-z]+)$/, '_400x400$1')
-        .replace(/_reasonably_small(\.[A-Za-z]+)$/, '_400x400$1');
-      return u.toString();
-    } catch (e) {
-      return url;
-    }
   }
 
   function scrollToLoadMore() {

@@ -68,7 +68,13 @@ FanOrbit/
 ├── db.js              IndexedDB 头像缓存
 ├── downloader.js      头像下载（重试 + 缓存）
 ├── generator.html/js  头像墙绘制（圆形/方形、中心倍数、竖切分图）与 JPG 输出
-├── lib/layout.js      分图条数、切割线与中心倍数
+├── lib/layout.js      旧的奇数分图条数与切割线
+├── lib/slice.js       按画面空隙自选条数切图
+├── lib/mosaic.js      角色马赛克覆盖与次数
+├── lib/coverage.js    必选账号与可用头像
+├── lib/import-public.js  fanorbit-public-v1 导入
+├── lib/avatar-url.js  官方头像主机与高清回退
+├── lib/zipstore.js    无压缩切片打包
 ├── lib/scoring.js     互动评分
 ├── lib/interaction.js fxtwitter / Yahoo / Bing 公开数据采集
 ├── lib/util.js        共享工具函数
@@ -78,7 +84,11 @@ FanOrbit/
 
 ## Grok Bot 技能
 
-[`skills/grok-bot-fan-art/SKILL.md`](skills/grok-bot-fan-art/SKILL.md) 给已经接上 X 连接的 Grok Bot 用：收集公开粉丝头像，按本仓库的评分公式排序，并做成网格墙、FanOrbit 环或角色马赛克。切图条数由 Bot 按当次需求和当时的平台限制决定。它不改变浏览器扩展的行为，也不表示只有 Grok Bot 能使用 X API。
+[`skills/grok-bot-fan-art/SKILL.md`](skills/grok-bot-fan-art/SKILL.md) 给已经接上 X 连接的 Grok Bot 用：收集公开粉丝头像，按本仓库的评分公式排序，并做成网格墙、FanOrbit 环或角色马赛克。角色马赛克默认让每个成功取得头像的账号出现 1 到 2 次。切图条数由 Bot 按当次需求和当时的平台限制决定。它不表示只有 Grok Bot 能使用 X API。
+
+浏览器扩展不使用、也不能模拟这套 X 连接。扩展自己的能力是：在已登录的粉丝页收集公开头像、用 fxtwitter / Yahoo / Bing 的有限分页做互动分、导入 `fanorbit-public-v1` 公开文件、生成圆环、方环、普通头像墙和角色马赛克，并按画面空隙切图。导入格式见 [`skills/grok-bot-fan-art/references/import-format.md`](skills/grok-bot-fan-art/references/import-format.md)。
+
+缺口：扩展拿不到 Grok Bot 的官方用户时间线；公开源和导入文件没有声明完整时，界面不会把结果说成全量。快速和深入扫描都有页数上限。没有凭证字段，也不要往导入文件里放 token 或 cookie。
 
 ## 许可证 License
 
