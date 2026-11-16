@@ -81,7 +81,9 @@ fxtwitter **出站**要求作者是本人，符合的都算，可以叠加：
 - 每个不是本人的提及 → 各一条 `mention`（回复对象若也在提及里，会再记一条 mention）
 - 引用对象不是本人 → 一条 `quote`
 
-Yahoo 入站：`replyMentions` 含本人才是 `reply`，否则一律 `mention`，不出 `quote` / `repost`。Yahoo 出站只给每个被提及的他人一条 `mention`。Bing 只有入站 `mention`，且没有 `createdAt`，时间权重因此为 1。
+Yahoo 入站：`replyMentions` 含本人才是 `reply`，否则一律 `mention`，不出 `quote` / `repost`。Yahoo 出站只给每个被提及的他人一条 `mention`。
+
+Bing（`bingEvents`）只产生 `type: 'mention'`：`author` 是推文 URL 里的用户名，`parseBingHtml` 会跳过本人；`target` 固定为本人；`createdAt` 为 `undefined`。`computeScores` 因 `target === selfLower` 把它们记成入站 mention，时间权重为 1。源码注释写的是 “Inbound mentions only.” 不是出站。
 
 官方 X 帖按同一优先级映射，字段以当次 schema 为准（常见是 `referenced_tweets` 的 `replied_to` / `quoted` / `retweeted`，以及提及实体）：
 

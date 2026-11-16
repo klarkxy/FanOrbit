@@ -53,10 +53,10 @@ description: >-
 
 ### 3. 下载头像
 
-只下载工具实际返回的公开 `pbs.twimg.com` URL。不要把文件或 URL 交给第三方拼图网站。
+只下载工具实际返回、且用 URL 解析后 `hostname === 'pbs.twimg.com'` 的地址。必须是主机名相等；`evilpbs.twimg.com` 这种后缀不算，不要用「以 `pbs.twimg.com` 结尾」判断。其它主机不下载。不要把文件或 URL 交给第三方拼图网站。
 
 - 小并发（遇 429 或超时时再降低）、有超时、有限次重试。
-- 档案图可以按 `lib/util.js` 的 `upscaleTwitterAvatar` 试常规高清变体：主机名以 `pbs.twimg.com` 结尾且路径含 `/profile_images/` 时，把文件名末尾的 `_normal`、`_mini`、`_bigger`、`_reasonably_small`、`_200x200` 换成 `_400x400`。必须先确认 HTTP 成功且图像能解码，失败就用工具返回的原 URL。扩展本身不解码校验；Bot 必须校验。
+- 高清变体只在上面的主机名检查已经通过、且路径含 `/profile_images/` 时尝试：把文件名末尾的 `_normal`、`_mini`、`_bigger`、`_reasonably_small`、`_200x200` 换成 `_400x400`。`lib/util.js` 的 `upscaleTwitterAvatar` 用 `hostname.endsWith('pbs.twimg.com')`，后缀伪造的主机也会通过；Bot 不要沿用这个判断。变体必须先确认 HTTP 成功且图像能解码，失败就用工具返回的原 URL。扩展本身不解码校验；Bot 必须校验。
 - 默认头像解码成功也是有效粉丝，不要悄悄删掉。
 - 文件名用数字 id，例如 `{id}.jpg`。不要用未经净化的用户名当路径。
 - 同时写 JSON 和 CSV 清单，字段见运行记录。已有且能解码的 id 跳过下载，分页仍要继续，直到下一页没有或额度用尽。下载失败的人留在名单里并记下原因，不能从粉丝集合里消失。
