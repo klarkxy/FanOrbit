@@ -3,13 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform: Chrome Extension](https://img.shields.io/badge/Platform-Manifest%20V3-purple)
 
-将你的头像置于中心，粉丝按互动频率由内向外环绕，生成一张同心环「粉丝纪念头像墙」（JPG）。内三环放大突出互动最高的核心粉丝，无互动记录的粉丝随机散布外环。
+将你的头像置于中心（2 / 3 / 4 倍于粉丝头像），粉丝按互动频率由内向外环绕，生成一张同心环「粉丝纪念头像墙」（JPG）。粉丝头像统一大小，无互动记录的粉丝随机散布外环。发到 X 时可以竖切成 3 到 19 的奇数条，正中间一条留住中心头像。
 
 **数据来源全部公开**：粉丝列表来自你已登录浏览器的 followers 页；互动数据来自 fxtwitter / Yahoo! Japan 实时搜索 / Bing 三个免登录公开源，**不需要 X API 密钥**，互动扫描环节也无需登录。
 
 ---
 
-**English**: FanOrbit places your own avatar at the center and orbits your fans around it as concentric rings, ordered by interaction frequency from the innermost ring outward (optional rainbow color sort by avatar hue); fans without any interaction data are placed randomly among the outer rings, with the three inner rings enlarged for the core fans and extra spacing around the center avatar. Fan collection approach referenced from [qiujiu-dev/XAvatarWall](https://github.com/qiujiu-dev/XAvatarWall); interaction scoring scheme inspired by [acnekot/NekoCircle](https://github.com/acnekot/NekoCircle) (reimplemented, no code copied: NekoCircle is AGPL-3.0).
+**English**: FanOrbit places your own avatar at the center (2×, 3× or 4× a fan avatar) and orbits fans around it as concentric rings, ordered by interaction frequency from the innermost ring outward (optional rainbow color sort by avatar hue). Fan avatars share one size; fans without interaction data sit at random among the outer rings. An optional vertical split writes 3, 5, … or 19 JPEG strips for one X post (up to 20 images; 19 keeps the center avatar on the middle image), with every cut kept in the gap between avatars. Fan collection approach referenced from [qiujiu-dev/XAvatarWall](https://github.com/qiujiu-dev/XAvatarWall); interaction scoring scheme inspired by [acnekot/NekoCircle](https://github.com/acnekot/NekoCircle) (reimplemented, no code copied: NekoCircle is AGPL-3.0).
 
 ## 安装 Installation
 
@@ -20,21 +20,21 @@
 ## 使用 Usage
 
 1. 点击工具栏 FanOrbit 图标打开控制面板。
-2. 输入 X 用户名（不带 `@`），选择数量上限、头像大小、背景色、标题与扫描深度，并可勾选「颜色排序（彩虹环）」：开启后按头像主色的色相从红到紫环绕排布，形成彩虹色环（默认关闭时按互动频率排序）。
-3. 布局形状可选「圆形（同心环）」或「方形（中心 2×2）」：方形模式密度更高、出图更接近正方形，发图后缩略更清晰；勾选「3分图」后输出竖向裁切的 3 条 JPG（`FanOrbit-1.jpg` ~ `FanOrbit-3.jpg`），切割线自动避开所有头像，中间一条完整保留你的中心头像，发推特时按顺序上传即可视觉拼合。生成页顶部也可以直接切换这两个选项。
+2. 输入 X 用户名（不带 `@`），选择数量上限、头像大小、背景色与扫描深度，并可勾选「颜色排序（彩虹环）」：开启后按头像主色的色相从红到紫环绕排布，形成彩虹色环（默认关闭时按互动频率排序）。
+3. 布局形状可选「圆形（同心环）」或「方形（方环）」。粉丝头像统一大小，中心头像可选 2 / 3 / 4 倍。分图可选 3、5、…、19 条竖图（`FanOrbit-1.jpg` 起按顺序上传，拼回去仍是原图）。切割线留在头像之间的空隙里，正中间一条完整留住中心头像。X 单帖最多 20 张，19 是中心头像仍落在正中间时的最大条数；画面列宽不够时，实际条数取当前仍能放下头像的最大奇数。生成页顶部也可以直接切换这些选项。
 4. 「开始制作」：
    - 阶段 1 — 扩展自动打开 `https://x.com/<用户名>/followers`，自动滚动采集粉丝列表（含断点续采）。
    - 阶段 2 — 后台同时从 Yahoo! 实时搜索与 fxtwitter 抓取公开推文互动（回复 / 引用 / 提及 / 转发），按用户名合并去重并评分。
-   - 阶段 3 — 打开生成页，绘制头像墙并自动下载（3分图模式下依次下载 3 张分图，浏览器若询问请允许「下载多个文件」）。
+   - 阶段 3 — 打开生成页，绘制头像墙并自动下载（分图模式下按条数依次下载 JPG，浏览器若询问请允许「下载多个文件」）。
 
 ## 布局规则 Layout rules
 
-- 中心：你自己的头像（自动通过 fxtwitter 获取，获取失败时使用占位徽标）；中心头像与第一环之间保留额外间距，避免紧贴。
-- 内环 → 外环：互动分从高到低。
+- 中心：你自己的头像（自动通过 fxtwitter 获取，获取失败时使用占位徽标），边长为粉丝头像的 2 / 3 / 4 倍；与第一环之间留有额外间距。
+- 粉丝头像统一大小。内环 → 外环：互动分从高到低。
 - 没有任何互动记录的粉丝：随机散布在外侧各环。
 - 「颜色排序」开启时，所有头像按主色色相排序后依槽位衔接，形成跨环的彩虹渐变；灰度头像排到最外侧。
-- 方形模式：中心头像占中央 2×2 格，粉丝头像为圆角方块，沿正方形环逐圈向外扩展（角落槽位锚定在角上，保持间距均匀）；「内三环放大」同样生效。
-- 3分图模式：在约 1/3、2/3 处规划 2 条竖直切割线，落在切割线上的槽位会被跳过（让出切割走廊），中间一条完整保留中心头像；极端情况下切线会贴着中心头像边缘平移，保证任何头像不被切开；条带宽度因此可能不完全相等，但 3 条始终无缝拼回原图。
+- 方形模式：粉丝头像为统一尺寸的圆角方块，沿正方形环逐圈向外扩展（角落槽位锚定在角上，间距均匀），中心按所选倍数占中。
+- 分图：按所选奇数条数（3 到 19）规划竖直切割线，正中间一条完整包住中心头像，落在切割线上的槽位让出走廊。中心头像比一条均分更宽时，中间条变宽、两侧在剩余宽度里均分。画面列宽不够排开所请求的条数时，实际条数取仍能让每条放下一个头像的最大奇数。各条宽度可以不同，按顺序拼回仍是原图。
 
 ## 评分方法 Scoring
 
@@ -67,7 +67,8 @@ FanOrbit/
 ├── collector.js       粉丝列表采集内容脚本
 ├── db.js              IndexedDB 头像缓存
 ├── downloader.js      头像下载（重试 + 缓存）
-├── generator.html/js  头像墙绘制（圆形/方形布局、3分图裁切）与 JPG 输出
+├── generator.html/js  头像墙绘制（圆形/方形、中心倍数、竖切分图）与 JPG 输出
+├── lib/layout.js      分图条数、切割线与中心倍数
 ├── lib/scoring.js     互动评分
 ├── lib/interaction.js fxtwitter / Yahoo / Bing 公开数据采集
 ├── lib/util.js        共享工具函数

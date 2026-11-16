@@ -6,12 +6,11 @@
     maxCount: 'all',
     avatarSize: 96,
     bgColor: '#f5f3ff',
-    titleText: '',
     scanMode: 'fast',
-    dualSize: true,
+    selfScale: 3,
     colorSort: false,
     shape: 'circle',
-    split3: false
+    splitParts: 1
   };
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -21,13 +20,11 @@
     $('maxCount').value = c.maxCount === 'all' ? '' : c.maxCount;
     $('avatarSize').value = c.avatarSize;
     $('bgColor').value = c.bgColor;
-    $('titleText').value = c.titleText || '';
     $('scanMode').value = c.scanMode || 'fast';
-    $('dualSize').checked = c.dualSize !== false;
+    $('selfScale').value = String(FanOrbitLayout.normalizeSelfScale(c));
     $('colorSort').checked = c.colorSort === true;
     $('shape').value = c.shape === 'square' ? 'square' : 'circle';
-    // Fall back to the legacy split4 key only when split3 was never saved.
-    $('split3').checked = c.split3 !== undefined ? c.split3 === true : c.split4 === true;
+    $('splitParts').value = String(FanOrbitLayout.normalizeSplitParts(c));
 
     $('startBtn').addEventListener('click', start);
     $('genBtn').addEventListener('click', openGen);
@@ -45,12 +42,11 @@
       maxCount: $('maxCount').value === '' ? 'all' : String($('maxCount').value),
       avatarSize: clampInt($('avatarSize').value, 40, 300, 96),
       bgColor: $('bgColor').value || '#f5f3ff',
-      titleText: $('titleText').value.trim(),
       scanMode: $('scanMode').value,
-      dualSize: $('dualSize').checked,
+      selfScale: FanOrbitLayout.normalizeSelfScale({ selfScale: $('selfScale').value }),
       colorSort: $('colorSort').checked,
       shape: $('shape').value === 'square' ? 'square' : 'circle',
-      split3: $('split3').checked
+      splitParts: FanOrbitLayout.normalizeSplitParts({ splitParts: $('splitParts').value })
     };
     await chrome.storage.local.set({ config });
     return config;

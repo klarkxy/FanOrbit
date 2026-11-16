@@ -1,17 +1,11 @@
 // FanOrbit generator: draws an orbit avatar wall — the user's own avatar
 // at the center, fans sorted by interaction score from the innermost ring
 // outward, fans with no interaction data placed randomly among the outer
-// rings. Two layout shapes are supported: 圆形 (concentric rings) and 方形
-// (square grid rings, the self avatar occupies the central 2x2 block). An
-// optional 3-split mode cuts the finished image into 3 vertical strips for
-// multi-image posts, with every cut line kept inside avatar-free corridors
-// (the middle strip always keeps the whole center self avatar).
-
-// split3 replaced the earlier split4 flag; fall back to the legacy key only
-// when split3 was never written, so an explicit false is honored.
-function split3Enabled(config) {
-  return config.split3 !== undefined ? config.split3 === true : config.split4 === true;
-}
+// rings. Fan avatars share one size; the center avatar is 2x, 3x or 4x.
+// Two layout shapes: 圆形 (concentric rings) and 方形 (square rings).
+// Optional vertical split writes an odd number of strips (3–19) for an X
+// post. Cut lines stay in avatar-free corridors, and the middle strip keeps
+// the whole center avatar. Strip count and center scale live in lib/layout.js.
 
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -30,8 +24,8 @@ function split3Enabled(config) {
     run();
   });
 
-  // Shape / split3 quick controls mirror the popup config, so the layout
-  // can be tweaked right on this page without reopening the control panel.
+  // Shape, center scale and strip count mirror the popup config, so the
+  // layout can be tweaked on this page without reopening the control panel.
   async function initControls() {
     let stored = {};
     try {
@@ -39,9 +33,11 @@ function split3Enabled(config) {
     } catch (e) { /* keep defaults */ }
     const config = stored.config || {};
     $('shapeSel').value = config.shape === 'square' ? 'square' : 'circle';
-    $('split3Chk').checked = split3Enabled(config);
+    $('selfScaleSel').value = String(FanOrbitLayout.normalizeSelfScale(config));
+    $('splitPartsSel').value = String(FanOrbitLayout.normalizeSplitParts(config));
     $('shapeSel').addEventListener('change', onControlChange);
-    $('split3Chk').addEventListener('change', onControlChange);
+    $('selfScaleSel').addEventListener('change', onControlChange);
+    $('splitPartsSel').addEventListener('change', onControlChange);
   }
 
   async function onControlChange() {
@@ -52,7 +48,8 @@ function split3Enabled(config) {
     const config = {
       ...(stored.config || {}),
       shape: $('shapeSel').value === 'square' ? 'square' : 'circle',
-      split3: $('split3Chk').checked
+      selfScale: FanOrbitLayout.normalizeSelfScale({ selfScale: $('selfScaleSel').value }),
+      splitParts: FanOrbitLayout.normalizeSplitParts({ splitParts: $('splitPartsSel').value })
     };
     try {
       await chrome.storage.local.set({ config });
@@ -110,10 +107,8 @@ function split3Enabled(config) {
     const size = clampInt(config.avatarSize, 40, 300, 96);
     const bgColor = config.bgColor || '#f5f3ff';
     const shape = config.shape === 'square' ? 'square' : 'circle';
-    const split3 = split3Enabled(config);
-    const titleRaw = config.titleText && config.titleText.trim() !== ''
-      ? config.titleText
-      : '恭喜我 {n} fo';
+    const splitParts = FanOrbitLayout.normalizeSplitParts(config);
+    const selfScale = FanOrbitLayout.normalizeSelfScale(config);
 
     setStatus('正在加载头像…');
     const loaded = await Downloader.download(fans, (p) => {
@@ -139,11 +134,11 @@ function split3Enabled(config) {
       setControlsEnabled(true);
       return;
     }
-    const result = await drawOrbitFromItems(ordered, selfBlob, size, bgColor, titleRaw.replace('{n}', String(ordered.length)), `FanOrbit · X@${fansData.username || ''}`, {
-      dualSize: config.dualSize !== false,
+    const result = await drawOrbitFromItems(ordered, selfBlob, size, bgColor, {
       colorSort: config.colorSort === true,
       shape,
-      split3
+      splitParts,
+      selfScale
     });
     if (!result) {
       setStatus('图片生成失败。');
@@ -159,7 +154,7 @@ function split3Enabled(config) {
       return;
     }
     let strips = null;
-    if (split3 && cuts) strips = await sliceStrips(canvas, cuts);
+    if (splitParts > 1 && cuts) strips = await sliceStrips(canvas, cuts);
 
     currentBlob = blob;
     currentStrips = strips && cuts && strips.length === cuts.length + 1 ? strips : null;
@@ -180,7 +175,15 @@ function split3Enabled(config) {
     if (config.colorSort === true) parts.push('颜色排序（彩虹环）');
     else parts.push(`互动排序 ${scored} 位 · 随机 ${ordered.length - scored} 位`);
     parts.push(`${size}px`);
-    if (currentStrips) parts.push(`3分图（竖裁 ${currentStrips.length} 条，预览虚线为切割线）`);
+    parts.push(`中心 ${selfScale} 倍`);
+    if (currentStrips) {
+      const got = currentStrips.length;
+      parts.push(splitParts > got
+        ? `竖裁 ${got} 条（请求 ${splitParts} 条，按头像列宽排到这里；预览虚线为切割线）`
+        : `竖裁 ${got} 条（预览虚线为切割线）`);
+    } else if (splitParts > 1) {
+      parts.push(`请求 ${splitParts} 条，当前宽度按一整张输出`);
+    }
     parts.push('JPEG 95%');
     $('meta').textContent = parts.join(' · ');
     setProgress(1);
@@ -216,13 +219,11 @@ function split3Enabled(config) {
     return arr;
   }
 
-  async function drawOrbitFromItems(items, selfBlob, size, bgColor, title, footer, opts) {
+  async function drawOrbitFromItems(items, selfBlob, size, bgColor, opts) {
     const count = items.length;
     if (!count) return null;
-    const dualSize = opts.dualSize;
     const colorSort = opts.colorSort;
     const isSquare = opts.shape === 'square';
-    const split3 = opts.split3 === true;
 
     const bitmaps = [];
     for (const item of items) {
@@ -249,25 +250,15 @@ function split3Enabled(config) {
     }
 
     const gap = Math.max(6, Math.round(size * 0.12));
-    // Two fixed tiers, not a gradual drain: the innermost BIG_RINGS rings
-    // use bigSize, every ring after that stays at the plain avatar size.
-    // Square grids read flatter than circles, so the tier contrast, center
-    // clearance and frame are all stronger there to keep the core legible.
-    const BIG_RINGS = 3;
-    const bigSize = dualSize ? Math.round(size * (isSquare ? 1.55 : 1.4)) : size;
+    // Fans share one size. The center self avatar is an integer multiple of
+    // that size; interaction rank still decides which ring a fan sits on.
+    const selfScale = FanOrbitLayout.normalizeSelfScale({ selfScale: opts.selfScale });
+    const selfHalf = Math.round((size * selfScale) / 2);
     // Extra margin between the center avatar and the first ring: the
     // decorative stroke below eats into the raw gap, without a margin the
     // nearest fans visually touch the purple center ring.
     const centerGap = Math.round(size * (isSquare ? 0.7 : 0.4));
-    const decorR = Math.round(bigSize * (isSquare ? 0.1 : 0.06));
-    // Extra spacing between the core (big) rings and the plain rings, so
-    // the core circle reads as its own zone. Square layout only.
-    const coreGap = isSquare && dualSize ? Math.round(size * 0.35) : 0;
-    // Half-width of the center self block: a disc in circle mode, a 2x2
-    // cell block (side 2*bigSize + gap) in square mode.
-    const selfHalf = isSquare
-      ? bigSize + Math.round(gap / 2)
-      : Math.round(bigSize * 1.75);
+    const decorR = Math.max(4, Math.round(size * (isSquare ? 0.12 : 0.08)));
     const pad = Math.round(size * 0.7);
     // Keep-out distance around each planned cut line: slots whose horizontal
     // extent comes this close to a cut are dropped, so no avatar is sliced.
@@ -275,15 +266,15 @@ function split3Enabled(config) {
 
     // Ring reach is the ring's center offset from the middle: a radius for
     // circles, a half side-length for squares. Ring k grows from ring k-1's
-    // own diameter, so tier switches keep a constant gap everywhere.
+    // own diameter, so the gap stays the same on every ring.
     const rings = [];
     let positions = [];
-    let W = 0, H = 0, cx = 0, cy = 0, titleH = 0, cuts = null;
+    let W = 0, H = 0, cx = 0, cy = 0, cuts = null;
     while (positions.length < count && rings.length < 200) {
       const prev = rings[rings.length - 1];
-      const s = dualSize && rings.length < BIG_RINGS ? bigSize : size;
+      const s = size;
       const reach = prev
-        ? prev.reach + (prev.size + s) / 2 + gap + (rings.length === BIG_RINGS ? coreGap : 0)
+        ? prev.reach + (prev.size + s) / 2 + gap
         : selfHalf + decorR + centerGap + s / 2 + gap;
       let cap;
       if (isSquare) {
@@ -299,14 +290,11 @@ function split3Enabled(config) {
 
       const orbitR = reach + s / 2;
       W = Math.ceil(2 * orbitR + pad * 2);
-      // Title band scales with the canvas width, not the avatar size — with
-      // hundreds of fans the canvas gets very wide and a fixed band would
-      // make the title unreadably small.
-      titleH = Math.max(Math.round(size * 0.6), Math.round(W * 0.045));
-      H = Math.ceil(W + titleH);
+      H = W;
       cx = W / 2;
-      cy = titleH + orbitR + pad / 2;
-      cuts = split3 ? planCuts(W, cx, selfHalf + decorR, cutMargin) : null;
+      cy = H / 2;
+      const fitted = FanOrbitLayout.fitSplitParts(opts.splitParts, W, selfHalf + decorR, cutMargin, size);
+      cuts = fitted > 1 ? FanOrbitLayout.planCuts(W, cx, selfHalf + decorR, cutMargin, fitted) : null;
 
       // Regenerate all slot positions against the latest canvas size: the
       // cut corridors depend on W, and every slot must clear the final cuts.
@@ -352,20 +340,6 @@ function split3Enabled(config) {
 
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, W, H);
-
-    // Core-zone halo: a soft tinted rounded square behind the big rings
-    // (plus a faint outline) so the inner circle reads as a distinct zone.
-    if (isSquare && dualSize && rings.length) {
-      const coreIdx = Math.min(BIG_RINGS, rings.length) - 1;
-      const coreHalf = rings[coreIdx].reach + rings[coreIdx].size / 2 + Math.round(coreGap * 0.5 + gap * 0.5);
-      ctx.beginPath();
-      roundedRect(ctx, cx - coreHalf, cy - coreHalf, coreHalf * 2, coreHalf * 2, Math.round(size * 0.45));
-      ctx.fillStyle = 'rgba(124, 58, 237, 0.055)';
-      ctx.fill();
-      ctx.lineWidth = Math.max(2, Math.round(size * 0.025));
-      ctx.strokeStyle = 'rgba(124, 58, 237, 0.16)';
-      ctx.stroke();
-    }
 
     // Draw fans: slots are ring-ordered, entries carry the final order.
     for (let i = 0; i < Math.min(entries.length, positions.length); i++) {
@@ -447,57 +421,7 @@ function split3Enabled(config) {
       }
     }
 
-    // Title + footer.
-    const textColor = contrastColor(bgColor);
-    const titleFont = Math.max(28, Math.round(W * 0.02));
-    ctx.fillStyle = '#6d28d9';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `700 ${titleFont}px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif`;
-    ctx.fillText(title, cx, titleH / 2 + titleFont / 2);
-    const footFont = Math.max(18, Math.round(W * 0.012));
-    ctx.fillStyle = textColor;
-    ctx.font = `${footFont}px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif`;
-    ctx.fillText(footer, cx, H - pad / 2);
-
     return { canvas, cuts };
-  }
-
-  // Two vertical cut lines near the third marks, producing 3 strips whose
-  // middle one keeps the whole center self avatar. Cuts may not slice the
-  // self block: a cut falling inside the block's forbidden zone (L, R)
-  // snaps to the nearer zone edge, and the spacing passes below jump
-  // across the zone whenever a min-width push would land inside it.
-  // The strips still tile the full image, only their widths may differ.
-  function planCuts(W, cx, selfExtentHalf, m) {
-    const L = Math.round(cx - selfExtentHalf - m - 1);
-    const R = Math.round(cx + selfExtentHalf + m + 1);
-    const inZone = (c) => c > L && c < R;
-    const snap = (q) => {
-      if (!inZone(q)) return q;
-      return q - L <= R - q ? L : R;
-    };
-    const minStrip = Math.max(Math.round(W * 0.08), 40);
-    const cuts = [1 / 3, 2 / 3].map((f) => snap(Math.round(W * f)));
-    // Forward pass: strictly increasing with a minimum strip width.
-    for (let i = 1; i < cuts.length; i++) {
-      cuts[i] = Math.max(cuts[i], cuts[i - 1] + minStrip);
-      if (inZone(cuts[i])) cuts[i] = R;
-      cuts[i] = Math.max(cuts[i], cuts[i - 1] + minStrip);
-    }
-    // Backward pass: clamp to the canvas edge and to the next cut.
-    for (let i = cuts.length - 1; i >= 0; i--) {
-      const hi = i === cuts.length - 1 ? W - m - 1 : cuts[i + 1] - minStrip;
-      cuts[i] = Math.min(cuts[i], hi);
-      if (inZone(cuts[i])) cuts[i] = L;
-    }
-    // Final forward guard against the backward pass pulling cuts together.
-    for (let i = 0; i < cuts.length; i++) {
-      const lo = i === 0 ? m + 1 : cuts[i - 1] + minStrip;
-      cuts[i] = Math.max(cuts[i], lo);
-      if (inZone(cuts[i])) cuts[i] = R;
-    }
-    return cuts;
   }
 
   function slotPath(ctx, x, y, s, isSquare) {
@@ -645,22 +569,10 @@ function split3Enabled(config) {
     }
   }
 
-  function contrastColor(hex) {
-    const { r, g, b } = parseHex(hex);
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return lum > 150 ? '#0f172a' : '#ffffff';
-  }
-
-  function parseHex(hex) {
-    let h = (hex || '').replace('#', '');
-    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-    const n = parseInt(h || 'f5f3ff', 16);
-    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-  }
-
   function setControlsEnabled(enabled) {
     $('shapeSel').disabled = !enabled;
-    $('split3Chk').disabled = !enabled;
+    $('selfScaleSel').disabled = !enabled;
+    $('splitPartsSel').disabled = !enabled;
   }
 
   function setStatus(text) {

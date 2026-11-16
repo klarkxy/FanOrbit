@@ -30,11 +30,6 @@
   </label>
 
   <label>
-    <span>标题文字</span>
-    <input id="titleText" type="text" placeholder="恭喜我 {n} 位粉丝" />
-  </label>
-
-  <label>
     <span>互动扫描深度</span>
     <select id="scanMode">
       <option value="fast">快速（约几十秒）</option>
@@ -42,9 +37,13 @@
     </select>
   </label>
 
-  <label class="row">
-    <span>内三环放大（内大外小双档）</span>
-    <input id="dualSize" type="checkbox" checked style="width:auto" />
+  <label>
+    <span>中心头像倍数（粉丝头像统一大小）</span>
+    <select id="selfScale">
+      <option value="2">2 倍</option>
+      <option value="3">3 倍</option>
+      <option value="4">4 倍</option>
+    </select>
   </label>
 
   <label class="row">
@@ -56,13 +55,24 @@
     <span>布局形状</span>
     <select id="shape">
       <option value="circle">圆形（同心环）</option>
-      <option value="square">方形（中心 2×2）</option>
+      <option value="square">方形（方环）</option>
     </select>
   </label>
 
-  <label class="row">
-    <span>3分图（竖向裁成 3 条，避开头像）</span>
-    <input id="split3" type="checkbox" style="width:auto" />
+  <label>
+    <span>分图条数（竖切，奇数，中心头像在正中间一条）</span>
+    <select id="splitParts">
+      <option value="1">不分图</option>
+      <option value="3">3 条</option>
+      <option value="5">5 条</option>
+      <option value="7">7 条</option>
+      <option value="9">9 条</option>
+      <option value="11">11 条</option>
+      <option value="13">13 条</option>
+      <option value="15">15 条</option>
+      <option value="17">17 条</option>
+      <option value="19">19 条</option>
+    </select>
   </label>
 
   <button id="startBtn">开始制作</button>
@@ -74,6 +84,7 @@
   <div id="status">待开始</div>
   <div id="meta" class="meta"></div>
 
+  <script src="lib/layout.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
