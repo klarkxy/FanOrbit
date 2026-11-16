@@ -10,12 +10,19 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   let currentBlob = null;
+  let currentPng = null;
   let currentStrips = null;
+  let currentPieces = null;
 
   document.addEventListener('DOMContentLoaded', async () => {
     $('saveBtn').addEventListener('click', () => {
-      if (currentStrips) downloadStrips(currentStrips);
-      else if (currentBlob) downloadBlob(currentBlob);
+      if (currentBlob) downloadBlob(currentBlob, 'FanOrbit.jpg');
+    });
+    $('pngBtn').addEventListener('click', () => {
+      if (currentPng) downloadBlob(currentPng, 'FanOrbit.png');
+    });
+    $('zipBtn').addEventListener('click', () => {
+      if (currentPieces && currentPieces.length) downloadZip(currentPieces);
     });
     $('againBtn').addEventListener('click', () => {
       run();
@@ -32,9 +39,9 @@
       stored = await chrome.storage.local.get('config');
     } catch (e) { /* keep defaults */ }
     const config = stored.config || {};
-    $('shapeSel').value = config.shape === 'square' ? 'square' : 'circle';
+    $('shapeSel').value = config.output || (config.shape === 'square' ? 'square' : 'circle');
     $('selfScaleSel').value = String(FanOrbitLayout.normalizeSelfScale(config));
-    $('splitPartsSel').value = String(FanOrbitLayout.normalizeSplitParts(config));
+    $('splitPartsSel').value = String(FanOrbitSlice.normalizeRequested(config.splitParts));
     $('shapeSel').addEventListener('change', onControlChange);
     $('selfScaleSel').addEventListener('change', onControlChange);
     $('splitPartsSel').addEventListener('change', onControlChange);
@@ -47,9 +54,10 @@
     } catch (e) { /* keep defaults */ }
     const config = {
       ...(stored.config || {}),
+      output: $('shapeSel').value,
       shape: $('shapeSel').value === 'square' ? 'square' : 'circle',
       selfScale: FanOrbitLayout.normalizeSelfScale({ selfScale: $('selfScaleSel').value }),
-      splitParts: FanOrbitLayout.normalizeSplitParts({ splitParts: $('splitPartsSel').value })
+      splitParts: FanOrbitSlice.normalizeRequested($('splitPartsSel').value)
     };
     try {
       await chrome.storage.local.set({ config });
@@ -107,7 +115,8 @@
     const size = clampInt(config.avatarSize, 40, 300, 96);
     const bgColor = config.bgColor || '#f5f3ff';
     const shape = config.shape === 'square' ? 'square' : 'circle';
-    const splitParts = FanOrbitLayout.normalizeSplitParts(config);
+    const output = config.output || shape;
+    const splitParts = FanOrbitSlice.normalizeRequested(config.splitParts);
     const selfScale = FanOrbitLayout.normalizeSelfScale(config);
 
     setStatus('正在加载头像…');
@@ -125,10 +134,12 @@
     // Center avatar (echo the user's own avatar or a placeholder tile).
     let selfBlob = null;
     if (interactionData.selfAvatar) {
-      selfBlob = await Downloader.fetchWithRetry(interactionData.selfAvatar, 2);
+      const fetchedSelf = await Downloader.fetchOfficial(interactionData.selfAvatar);
+      selfBlob = fetchedSelf.blob;
     }
 
-    const ordered = buildOrderedItems(ranked, ok, unranked, ok);
+    const ordered = buildOrderedItems(ranked, ok, output === 'circle' || output === 'square' ? unranked : unranked.slice().sort((a, b) => (a.index || 0) - (b.index || 0)), ok);
+    if (!output || output === 'circle' || output === 'square') {
     if (!ordered.length) {
       setStatus('没有可用的头像数据，请先开始粉丝采集。');
       setControlsEnabled(true);
@@ -140,58 +151,24 @@
       splitParts,
       selfScale
     });
-    if (!result) {
-      setStatus('图片生成失败。');
-      setControlsEnabled(true);
-      return;
+    await presentCanvas(result && result.canvas, result && result.cuts, result && result.placed, result && result.centerRect, {
+      output,
+      ordered,
+      scored: ranked.length,
+      size,
+      selfScale,
+      splitParts,
+      note: result && result.sliceNote,
+      colorSort: config.colorSort === true,
+      failed: loaded.failed,
+      coverage: fansData.coverage,
+      scan: interactionData.scan,
+      missing: fansData.missing || []
+    });
+    return;
     }
 
-    const { canvas, cuts } = result;
-    const blob = await canvasToBlob(canvas);
-    if (!blob) {
-      setStatus('图片生成失败。');
-      setControlsEnabled(true);
-      return;
-    }
-    let strips = null;
-    if (splitParts > 1 && cuts) strips = await sliceStrips(canvas, cuts);
-
-    currentBlob = blob;
-    currentStrips = strips && cuts && strips.length === cuts.length + 1 ? strips : null;
-    $('saveBtn').textContent = currentStrips ? `保存 ${currentStrips.length} 张分图` : '保存 JPG';
-    const previewCanvas = currentStrips ? withCutGuides(canvas, cuts) : canvas;
-    const previewBlob = currentStrips ? await canvasToBlob(previewCanvas) : blob;
-    const previewUrl = URL.createObjectURL(previewBlob || blob);
-    $('preview').src = previewUrl;
-    $('preview').style.display = 'block';
-    $('saveBtn').disabled = false;
-    $('againBtn').disabled = false;
-    setControlsEnabled(true);
-    const scored = ranked.length;
-    const parts = [
-      `${ordered.length} 位粉丝`,
-      shape === 'square' ? '方形网格' : '圆形同心环'
-    ];
-    if (config.colorSort === true) parts.push('颜色排序（彩虹环）');
-    else parts.push(`互动排序 ${scored} 位 · 随机 ${ordered.length - scored} 位`);
-    parts.push(`${size}px`);
-    parts.push(`中心 ${selfScale} 倍`);
-    if (currentStrips) {
-      const got = currentStrips.length;
-      parts.push(splitParts > got
-        ? `竖裁 ${got} 条（请求 ${splitParts} 条，按头像列宽排到这里；预览虚线为切割线）`
-        : `竖裁 ${got} 条（预览虚线为切割线）`);
-    } else if (splitParts > 1) {
-      parts.push(`请求 ${splitParts} 条，当前宽度按一整张输出`);
-    }
-    parts.push('JPEG 95%');
-    $('meta').textContent = parts.join(' · ');
-    setProgress(1);
-    setStatus(currentStrips
-      ? `生成完成，已下载 ${currentStrips.length} 张分图（若浏览器询问，请允许「下载多个文件」）`
-      : '生成完成');
-
-    autoDownload();
+    await presentFlat(output, fans, loaded, selfBlob, size, bgColor, config, scoreByName, splitParts, fansData, interactionData);
   }
 
   // Place ranked fans first (innermost-out), then the shuffled no-data fans
@@ -270,6 +247,7 @@
     const rings = [];
     let positions = [];
     let W = 0, H = 0, cx = 0, cy = 0, cuts = null;
+    let sliceNote = '';
     while (positions.length < count && rings.length < 200) {
       const prev = rings[rings.length - 1];
       const s = size;
@@ -293,8 +271,9 @@
       H = W;
       cx = W / 2;
       cy = H / 2;
-      const fitted = FanOrbitLayout.fitSplitParts(opts.splitParts, W, selfHalf + decorR, cutMargin, size);
-      cuts = fitted > 1 ? FanOrbitLayout.planCuts(W, cx, selfHalf + decorR, cutMargin, fitted) : null;
+      const corridor = FanOrbitSlice.planCorridor(W, cx, selfHalf + decorR, cutMargin, size, opts.splitParts);
+      cuts = corridor.parts > 1 ? corridor.cuts : null;
+      sliceNote = corridor.note || '';
 
       // Regenerate all slot positions against the latest canvas size: the
       // cut corridors depend on W, and every slot must clear the final cuts.
@@ -341,6 +320,13 @@
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, W, H);
 
+    const placed = [];
+    const centerRect = {
+      x: cx - (selfHalf + decorR),
+      y: cy - (selfHalf + decorR),
+      w: (selfHalf + decorR) * 2,
+      h: (selfHalf + decorR) * 2
+    };
     // Draw fans: slots are ring-ordered, entries carry the final order.
     for (let i = 0; i < Math.min(entries.length, positions.length); i++) {
       const bmp = entries[i].bitmap;
@@ -348,6 +334,7 @@
       if (!bmp) continue;
 
       const drawRadius = pos.s / 2;
+      placed.push({ x: pos.x - drawRadius, y: pos.y - drawRadius, w: pos.s, h: pos.s });
       ctx.save();
       ctx.beginPath();
       slotPath(ctx, pos.x, pos.y, pos.s, isSquare);
@@ -421,7 +408,7 @@
       }
     }
 
-    return { canvas, cuts };
+    return { canvas, cuts, placed, centerRect, sliceNote };
   }
 
   function slotPath(ctx, x, y, s, isSquare) {
@@ -573,6 +560,316 @@
     $('shapeSel').disabled = !enabled;
     $('selfScaleSel').disabled = !enabled;
     $('splitPartsSel').disabled = !enabled;
+    $('targetFile').disabled = !enabled;
+  }
+
+  function stripsFrom(width, height, cuts, note) {
+    const bounds = [0, ...cuts, width];
+    const strips = [];
+    for (let i = 0; i < bounds.length - 1; i++) {
+      strips.push({ index: i, x: bounds[i], y: 0, w: bounds[i + 1] - bounds[i], h: height });
+    }
+    return { cuts, parts: strips.length, strips, names: FanOrbitSlice.names(strips.length), note: note || '', reduced: false };
+  }
+
+  async function presentCanvas(canvas, cuts, placed, centerRect, info) {
+    if (!canvas) {
+      setStatus('图片生成失败。');
+      setControlsEnabled(true);
+      return;
+    }
+    const png = await canvasToPng(canvas);
+    const blob = await canvasToBlob(canvas);
+    if (!blob || !png) {
+      setStatus('图片生成失败。');
+      setControlsEnabled(true);
+      return;
+    }
+    let plan = { cuts: [], parts: 1, strips: [{ index: 0, x: 0, y: 0, w: canvas.width, h: canvas.height }], names: ['01.jpg'], note: info.note || '', reduced: false };
+    let audit = FanOrbitSlice.audit(canvas.width, plan.strips, placed || [], centerRect);
+    if (cuts && cuts.length) {
+      const corridorPlan = stripsFrom(canvas.width, canvas.height, cuts, info.note || '');
+      const corridorAudit = FanOrbitSlice.audit(canvas.width, corridorPlan.strips, placed || [], centerRect);
+      if (corridorAudit.ok) {
+        plan = corridorPlan;
+        audit = corridorAudit;
+      }
+    }
+    if ((info.splitParts || 1) > 1) {
+      const adaptive = FanOrbitSlice.plan({
+        width: canvas.width,
+        height: canvas.height,
+        requested: info.splitParts,
+        minStrip: Math.max(8, info.size || 1),
+        obstacles: placed || [],
+        center: centerRect
+      });
+      const adaptiveAudit = FanOrbitSlice.audit(canvas.width, adaptive.strips, placed || [], centerRect);
+      if (adaptiveAudit.ok && adaptive.parts > 1) {
+        plan = adaptive;
+        audit = adaptiveAudit;
+      }
+    }
+    let strips = null;
+    if (audit.ok && plan.parts > 1) strips = await sliceStrips(canvas, plan.cuts);
+    currentPng = png;
+    currentBlob = blob;
+    currentStrips = strips;
+    currentPieces = strips ? await namedPieces(strips, plan.names) : null;
+    $('zipBtn').disabled = !currentPieces;
+    $('pngBtn').disabled = false;
+    $('saveBtn').disabled = false;
+    $('againBtn').disabled = false;
+    const previewCanvas = currentPieces ? withCutGuides(canvas, plan.cuts) : canvas;
+    const previewBlob = await canvasToBlob(previewCanvas);
+    $('preview').src = URL.createObjectURL(previewBlob || blob);
+    $('preview').style.display = 'block';
+    setControlsEnabled(true);
+    const lines = [
+      `${info.ordered.length} 位已绘制`,
+      info.output === 'square' ? '方形环' : '圆形同心环',
+      info.colorSort ? '颜色排序（彩虹环）' : `互动排序 ${info.scored} 位`,
+      `中心 ${info.selfScale} 倍`,
+      plan.note || (plan.parts > 1 ? `竖裁 ${plan.parts} 条` : '不分图'),
+      audit.ok ? '切线没有穿过头像或中心' : ('切图校验失败：' + audit.problems.join('；'))
+    ];
+    if (info.coverage && info.coverage.note) lines.push(info.coverage.note);
+    if (info.scan && info.scan.note) lines.push(info.scan.note);
+    if (info.failed) lines.push(`头像下载失败 ${info.failed} 个`);
+    if (info.missing && info.missing.length) lines.push(`名单里另有缺失 ${info.missing.length} 条`);
+    $('meta').textContent = lines.join(' · ');
+    $('report').textContent = lines.join('\n');
+    setProgress(1);
+    setStatus(audit.ok ? '生成完成' : '生成完成，但切片没有通过校验，未提供切片');
+  }
+
+  async function presentFlat(output, fans, loaded, selfBlob, size, bgColor, config, scoreByName, splitParts, fansData, interactionData) {
+    const failedRows = loaded.results.filter((row) => row && !row.blob).map((row) => ({
+      id: row.id || '',
+      username: row.username || '',
+      failed: true,
+      reason: row.error || '头像下载或解码失败',
+      avatar: row.avatar
+    }));
+    const okFans = fans.filter((fan) => loaded.results.some((row) => row && row.blob && row.username === fan.username));
+    const named = String(config.mustNames || '').split(/\s+/).filter(Boolean);
+    const built = FanOrbitCoverage.build({
+      followers: okFans.map((fan) => {
+        const score = scoreByName[(fan.username || '').toLowerCase()];
+        return { ...fan, avatarUrl: fan.avatar, score: score ? score.score : 0 };
+      }),
+      extras: named.map((name) => ({ username: name, named: true })),
+      named,
+      scores: Object.values(scoreByName || {}),
+      missing: (fansDataMissing(loaded))
+    });
+    built.missing.push(...failedRows.map((row) => ({ id: row.id, username: row.username, reason: row.reason })));
+    await Promise.all(loaded.results.filter((row) => row && row.blob).map(async (row) => {
+      try { row.image = await createImageBitmap(row.blob); } catch (e) { row.image = null; }
+    }));
+    if (output === 'grid') {
+      const wall = FanOrbitCoverage.orderForWall(okFans, scoreByName);
+      const canvas = drawGrid(wall.ranked.concat(wall.unscored), loaded.results, size, bgColor);
+      const placed = gridRects(wall.ranked.length + wall.unscored.length, size);
+      await presentCanvas(canvas, [], placed, null, {
+        output, ordered: wall.ranked.concat(wall.unscored), scored: wall.ranked.length, size, selfScale: 1,
+        splitParts, note: wall.label, colorSort: false, failed: failedRows.length,
+        coverage: { note: [wall.label + '。普通头像墙每人一格。', fansData.coverage && fansData.coverage.note].filter(Boolean).join(' ') },
+        scan: interactionData.scan, missing: built.missing
+      });
+      return;
+    }
+    const targetBlob = await readTargetFile() || selfBlob;
+    const accounts = await accountColors(built.accounts, loaded.results);
+    let colorAt = null;
+    let targetBitmap = null;
+    if (targetBlob) {
+      try { targetBitmap = await createImageBitmap(targetBlob); } catch (e) { targetBitmap = null; }
+    }
+    const probe = FanOrbitMosaic.plan({ accounts, cap: 2 });
+    if (targetBitmap && probe.ok) colorAt = sampleColors(targetBitmap, probe.cols, probe.rows);
+    const plan = FanOrbitMosaic.plan({ accounts, cap: 2, cols: probe.cols, rows: probe.rows, colorAt });
+    if (!plan.ok) {
+      setStatus(plan.problems.join('；') || '马赛克排不开');
+      $('report').textContent = plan.problems.join('\n');
+      setControlsEnabled(true);
+      return;
+    }
+    const canvas = drawMosaic(plan, accounts, loaded.results, size, bgColor, colorAt);
+    const placed = plan.cells.filter((cell) => cell.id).map((cell) => ({
+      x: cell.c * size, y: cell.r * size, w: size, h: size
+    }));
+    const stats = plan.stats;
+    await presentCanvas(canvas, [], placed, null, {
+      output,
+      ordered: accounts,
+      scored: accounts.filter((row) => row.score > 0).length,
+      size,
+      selfScale: 1,
+      splitParts,
+      note: [
+        '角色马赛克',
+        `总格 ${stats.gridCells}`,
+        `有效头像格 ${stats.avatarCells}`,
+        `唯一账号 ${stats.uniqueAccounts}`,
+        `唯一图像 ${built.uniqueImages}`,
+        `同图账号比例 ${(built.sameImageAccountRatio * 100).toFixed(1)}%`,
+        `重复格 ${stats.repeatCells}（${(stats.repeatRatio * 100).toFixed(1)}%）`,
+        `每人最多 ${stats.maxPerAccount} 次`,
+        `未使用 ${stats.unusedAccounts}`,
+        `相邻重复 ${stats.duplicateAdjacency}`,
+        targetBitmap ? '使用了轻度调色，头像仍可辨认' : '没有目标图，未做颜色优化',
+        `缺失 ${built.missing.length}`,
+        fansData.coverage && fansData.coverage.note,
+        interactionData.scan && interactionData.scan.note
+      ].filter(Boolean).join('，'),
+      colorSort: false,
+      failed: failedRows.length,
+      coverage: fansData.coverage,
+      scan: interactionData.scan,
+      missing: built.missing
+    });
+    if (targetBitmap && targetBitmap.close) targetBitmap.close();
+  }
+
+  function fansDataMissing() {
+    return [];
+  }
+
+  function gridRects(count, size) {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const rects = [];
+    for (let i = 0; i < count; i++) {
+      rects.push({ x: (i % cols) * size, y: Math.floor(i / cols) * size, w: size, h: size });
+    }
+    return rects;
+  }
+
+  function drawGrid(ordered, results, size, bgColor) {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(ordered.length || 1)));
+    const rows = Math.max(1, Math.ceil((ordered.length || 1) / cols));
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * size;
+    canvas.height = rows * size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ordered.forEach((fan, index) => {
+      const got = results.find((row) => row && row.username === fan.username && row.blob);
+      if (!got) return;
+      const x = (index % cols) * size;
+      const y = Math.floor(index / cols) * size;
+      drawCover(ctx, got.bitmap || null, got, x, y, size);
+    });
+    return canvas;
+  }
+
+  function drawMosaic(plan, accounts, results, size, bgColor, colorAt) {
+    const canvas = document.createElement('canvas');
+    canvas.width = plan.cols * size;
+    canvas.height = plan.rows * size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const byId = new Map(accounts.map((row) => [String(row.id), row]));
+    plan.cells.forEach((cell) => {
+      if (!cell.id) return;
+      const account = byId.get(cell.id);
+      const got = results.find((row) => row && account && row.username === account.username && row.blob);
+      const x = cell.c * size;
+      const y = cell.r * size;
+      if (got) drawCover(ctx, null, got, x, y, size);
+      if (colorAt) {
+        const tint = colorAt(cell.c, cell.r);
+        if (tint) {
+          ctx.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},0.12)`;
+          ctx.fillRect(x, y, size, size);
+        }
+      }
+    });
+    return canvas;
+  }
+
+  function drawCover(ctx, bitmap, item, x, y, size) {
+    // bitmap is created lazily by the caller through createImageBitmap; the
+    // download result only has a blob. The async path below is not used.
+    if (item.image) {
+      ctx.save();
+      roundedClip(ctx, x, y, size);
+      ctx.drawImage(item.image, x, y, size, size);
+      ctx.restore();
+    }
+  }
+
+  async function accountColors(accounts, results) {
+    const out = [];
+    for (const account of accounts) {
+      const got = results.find((row) => row && row.username === account.username && row.blob);
+      let color = null;
+      if (got && got.image) {
+        try { color = averageColor(got.image); } catch (e) { color = null; }
+      }
+      out.push({ ...account, color });
+    }
+    return out;
+  }
+
+  function averageColor(bitmap) {
+    const box = document.createElement('canvas');
+    box.width = 8;
+    box.height = 8;
+    const g = box.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bitmap, 0, 0, 8, 8);
+    const data = g.getImageData(0, 0, 8, 8).data;
+    let r = 0, gg = 0, b = 0, n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i]; gg += data[i + 1]; b += data[i + 2]; n++;
+    }
+    return n ? [r / n, gg / n, b / n] : null;
+  }
+
+  function sampleColors(bitmap, cols, rows) {
+    const box = document.createElement('canvas');
+    box.width = cols;
+    box.height = rows;
+    const g = box.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bitmap, 0, 0, cols, rows);
+    const data = g.getImageData(0, 0, cols, rows).data;
+    return (c, r) => {
+      const i = (r * cols + c) * 4;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+  }
+
+  function roundedClip(ctx, x, y, size) {
+    ctx.beginPath();
+    ctx.rect(x, y, size, size);
+  }
+
+  function readTargetFile() {
+    const input = $('targetFile');
+    const file = input && input.files && input.files[0];
+    return file ? Promise.resolve(file) : Promise.resolve(null);
+  }
+
+  async function namedPieces(strips, names) {
+    const pieces = [];
+    for (let i = 0; i < strips.length; i++) {
+      const buf = new Uint8Array(await strips[i].arrayBuffer());
+      pieces.push({ name: names[i] || (i + 1) + '.jpg', data: buf, blob: strips[i] });
+    }
+    return pieces;
+  }
+
+  function downloadZip(pieces) {
+    const bytes = FanOrbitZip.encode(pieces.map((piece) => ({ name: piece.name, data: piece.data })));
+    downloadBlob(new Blob([bytes], { type: 'application/zip' }), 'FanOrbit-slices.zip');
+  }
+
+  function canvasToPng(canvas) {
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/png');
+    });
   }
 
   function setStatus(text) {

@@ -7,7 +7,7 @@
 </head>
 <body>
   <header>FanOrbit</header>
-  <p class="hint">把你放在中心，粉丝按互动频率由内向外环绕。</p>
+  <p class="hint">插件只使用已登录粉丝页和公开网页源，没有 Grok Bot 的 X 连接。也可以导入一份公开数据文件。</p>
 
   <label>
     <span>X 用户名</span>
@@ -52,31 +52,32 @@
   </label>
 
   <label>
-    <span>布局形状</span>
-    <select id="shape">
-      <option value="circle">圆形（同心环）</option>
-      <option value="square">方形（方环）</option>
+    <span>成图</span>
+    <select id="output">
+      <option value="circle">圆形同心环</option>
+      <option value="square">方形环</option>
+      <option value="grid">普通头像墙（每人一次）</option>
+      <option value="mosaic">角色头像马赛克</option>
     </select>
   </label>
 
   <label>
-    <span>分图条数（竖切，奇数，中心头像在正中间一条）</span>
-    <select id="splitParts">
-      <option value="1">不分图</option>
-      <option value="3">3 条</option>
-      <option value="5">5 条</option>
-      <option value="7">7 条</option>
-      <option value="9">9 条</option>
-      <option value="11">11 条</option>
-      <option value="13">13 条</option>
-      <option value="15">15 条</option>
-      <option value="17">17 条</option>
-      <option value="19">19 条</option>
-    </select>
+    <span>分图条数（1 = 不分。按空隙能切多少算多少，不是平台张数上限）</span>
+    <input id="splitParts" type="number" min="1" step="1" value="1" />
   </label>
 
-  <button id="startBtn">开始制作</button>
-  <button id="genBtn" class="secondary">打开生成页面</button>
+  <label>
+    <span>点名必选（每行一个用户名，可不是粉丝）</span>
+    <textarea id="mustNames" rows="3" placeholder="留空则只保护本次双向互动的人"></textarea>
+  </label>
+
+  <label>
+    <span>导入公开数据 JSON</span>
+    <input id="importFile" type="file" accept="application/json,.json" />
+  </label>
+
+  <button id="startBtn">从粉丝页开始采集</button>
+  <button id="genBtn" class="secondary">用已有数据打开生成页</button>
 
   <div class="progressWrap">
     <div class="progressFill" id="fill"></div>
@@ -84,7 +85,9 @@
   <div id="status">待开始</div>
   <div id="meta" class="meta"></div>
 
+  <script src="lib/avatar-url.js"></script>
+  <script src="lib/import-public.js"></script>
   <script src="lib/layout.js"></script>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

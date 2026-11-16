@@ -124,13 +124,15 @@ async function onCollectDone(payload) {
         selfAvatar,
         sources: bundle.sources,
         failures: bundle.failures,
+        scan: bundle.scan,
         scannedAt: Date.now()
       },
       progress: {
         current: scores.length,
         max: scores.length,
         message: `互动扫描完成：${scores.length} 位有互动记录（源：${bundle.sources.join('、') || '无'}` +
-          (bundle.failures.length ? `；不可用：${bundle.failures.join('、')}` : '') + '）'
+          (bundle.failures.length ? `；不可用：${bundle.failures.join('、')}` : '') +
+          '）。' + (bundle.scan && bundle.scan.note ? bundle.scan.note : '')
       }
     });
   } catch (e) {

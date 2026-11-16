@@ -44,6 +44,8 @@ description: >-
 
 要改仓库里的布局或扩展代码时，交给 Grok Bot 的云端 code-changes。图像渲染可以在本机用已经下载的头像完成。禁止自己 `git clone` 这个仓库。
 
+Chrome 扩展实现了同一套成图规则，但没有这个 X 连接。它只能走粉丝页、有限的公开网页源，或导入 [references/import-format.md](references/import-format.md) 描述的 `fanorbit-public-v1` 文件。不要在扩展里调用本技能使用的 X 工具，也不要为了打通两边去复制 token。
+
 ### 2. 本人与粉丝
 
 用当前 schema 里读取已授权用户的接口（编写时的例子是 `get_users_me`）取得数字 id、公开粉丝数和真实头像 URL。把 id 记为 `{me}`。目标角色的中心图或 photomosaic 目标图只用这张真实头像，或用户另行提供的参考图。不要根据外貌描述生成一张脸，再把它叫做对方的真实头像。

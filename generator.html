@@ -31,45 +31,47 @@
   </style>
 </head>
 <body>
-  <h1>FanOrbit — 生成专属粉丝同心环头像墙</h1>
+  <h1>FanOrbit — 头像墙、同心环与角色马赛克</h1>
   <div class="progressWrap"><div class="progressFill" id="fill"></div></div>
   <div id="status">正在读取数据…</div>
   <div id="meta"></div>
   <div id="genControls">
-    <label>布局
+    <label>成图
       <select id="shapeSel">
         <option value="circle">圆形（同心环）</option>
         <option value="square">方形（方环）</option>
+        <option value="grid">普通头像墙</option>
+        <option value="mosaic">角色马赛克</option>
       </select>
     </label>
-    <label>中心
+    <label>中心倍数
       <select id="selfScaleSel">
         <option value="2">2 倍</option>
         <option value="3">3 倍</option>
         <option value="4">4 倍</option>
       </select>
     </label>
-    <label>分图
-      <select id="splitPartsSel">
-        <option value="1">不分</option>
-        <option value="3">3 条</option>
-        <option value="5">5 条</option>
-        <option value="7">7 条</option>
-        <option value="9">9 条</option>
-        <option value="11">11 条</option>
-        <option value="13">13 条</option>
-        <option value="15">15 条</option>
-        <option value="17">17 条</option>
-        <option value="19">19 条</option>
-      </select>
+    <label>分图条数
+      <input id="splitPartsSel" type="number" min="1" step="1" value="1" />
+    </label>
+    <label>马赛克目标图
+      <input id="targetFile" type="file" accept="image/*" />
     </label>
   </div>
+  <pre id="report" style="white-space:pre-wrap;color:#41456b;"></pre>
   <div style="margin: 16px 0;">
     <img id="preview" alt="FanOrbit 头像墙预览" />
   </div>
   <button id="saveBtn">保存 JPG</button>
+  <button id="pngBtn">保存高清 PNG</button>
+  <button id="zipBtn">保存切片 ZIP</button>
   <button id="againBtn">重新生成</button>
 
+  <script src="lib/avatar-url.js"></script>
+  <script src="lib/coverage.js"></script>
+  <script src="lib/mosaic.js"></script>
+  <script src="lib/slice.js"></script>
+  <script src="lib/zipstore.js"></script>
   <script src="lib/layout.js"></script>
   <script src="db.js"></script>
   <script src="downloader.js"></script>
