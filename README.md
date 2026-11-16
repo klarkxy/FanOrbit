@@ -78,7 +78,7 @@ FanOrbit/
 
 ## Grok Bot 技能
 
-[`skills/grok-bot-fan-art/SKILL.md`](skills/grok-bot-fan-art/SKILL.md) 给已经接上 X 连接的 Grok Bot 用：收集公开粉丝头像，按本仓库的评分公式排序，并做成网格墙、FanOrbit 环或角色马赛克。切图条数由 Bot 按当次需求和当时的平台限制决定。它不改变浏览器扩展的行为，也不表示只有 Grok Bot 能使用 X API。
+[`skills/grok-bot-fan-art/SKILL.md`](skills/grok-bot-fan-art/SKILL.md) 给已经接上 X 连接的 Grok Bot 用：收集公开粉丝头像，按本仓库的评分公式排序，并做成网格墙、FanOrbit 环或角色马赛克。角色马赛克默认让每个成功取得头像的账号出现 1 到 2 次。切图条数由 Bot 按当次需求和当时的平台限制决定。它不改变浏览器扩展的行为，也不表示只有 Grok Bot 能使用 X API。
 
 ## 许可证 License
 
